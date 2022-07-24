@@ -1,0 +1,27 @@
+Operating Voltage: 4.8V~6V
+
+Speed: 0.10 sec/60deg (4.8v)    0.08sec/60deg (6v)
+
+Torque: 1.6kg.cm (4.8v)          1.8kg.cm (6v)
+
+Size: 23mmX12.5mmX22mm
+
+Weight: 10gram
+
+Motor: 3 pole Core motor
+
+Gear Train: plastic(POM gear)
+
+Ball Bearing: No
+
+Dead band width: 4usc
+
+Interface: (JR)
+
+Wire length: 24cm
+
+Type: Digital,
+
+Rotation angle:180degree(PWM500-2500us)
+
+

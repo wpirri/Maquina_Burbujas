@@ -1,0 +1,10 @@
+Listado de componentes
+
+1   uP                  PIC12F629
+1   servo               DM-S0090D
+1   cooler 80x80x12v
+4   tact-switch
+2   transistor          TIP-41C
+
+Disco burbujas: Radio 120mm
+Cooler: 80x80x25mm (Orificios de fijación 70mm / 4mm)
