@@ -49,33 +49,44 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-
 #include "iee.h"
-#include "bitmacro.h"
-
-#include "input.h"
-#include "output.h"
 
 __EEPROM_DATA( 0x80, 0x80, 0x00, 0x00, 0x00,  0x00, 0x00, 0x00 );
+
+
+
+#define BOTON_DELAY 500
+
+
+volatile unsigned char timerFlag1KHz;
+unsigned int timerCount;
+
+unsigned char pwmDisco;
+unsigned char pwmTurbina;
+unsigned char powerStatus;
+unsigned char countDisco;
+unsigned char countTurbina;
+unsigned int contDelayBtnDiscoUp;
+unsigned int contDelayBtnTurbinaUp;
+unsigned int contDelayBtnDiscoDown;
+unsigned int contDelayBtnTurbinaDown;
+unsigned char btnDiscoUp;
+unsigned char btnDiscoDown;
+unsigned char btnTurbinaUp;
+unsigned char btnTurbinaDown;
+
 
 /* *************************************************************************** *
  * Globales
  */
-volatile unsigned char timerFlag1KHz;
-volatile unsigned char timerCount;
 
-unsigned char powerStatus;
-unsigned char pwmDisco;
-unsigned char pwmTurbina;
 
 /* Interrupción cada 256us */
 void Timer0Int()
 {
-    T0IF = 0;
 	if( !T0IE) return;
-    
-	timerCount++;
-    if(timerCount > 7)
+	
+    if(++timerCount >= 3906)
     {
         timerCount = 0;
         timerFlag1KHz = 1;
@@ -129,7 +140,6 @@ void __interrupt() ISR(void)
  */
 void main(void)
 {
-    unsigned char shadowReg;
     /*
     bit 7 GPPU: GPIO Pull-up Enable bit
         1 = GPIO pull-ups are disabled
@@ -159,15 +169,15 @@ void main(void)
      */
     OPTION_REG = 0b00001111;
 
-    /**/
+   
     GPIO = 0x00;
+    TRISIO = 0b11111100;
+
     /* Control del comparador */
     CMCON = 0b00000000;     /* Solamente necesario para el 675 */
-
-    /* Configuracion de I/O */
-    TRISIO = 0b11111100;
+    
     /* Pull-Up */
-    WPU = 0b00111100;
+    WPU = 0b00110100;
     
     /*
      ADC
@@ -191,10 +201,9 @@ void main(void)
         1 = A/D converter module is operating
         0 = A/D converter is shut-off and consumes no operating current
     */
-#ifdef _12F675
     ADCON0 = 0b10000000;
     ANSEL = 0b00000000;
-#endif
+
     /*
         bit 7 Unimplemented: Read as ?0?
         bit 6 TMR1GE: Timer1 Gate Enable bit
@@ -280,35 +289,199 @@ void main(void)
      */
     IOC = 0b00000000;
 
-    
-    ControlBotonInit();
-    OutputInit();
-    
-    powerStatus = 1;
+    powerStatus = 0;
     timerFlag1KHz = 0;
     timerCount = 0;
-
     pwmDisco = 5;
     pwmTurbina = 5;
-
+    countDisco = 0;
+    countTurbina = 0;
+    contDelayBtnDiscoUp = BOTON_DELAY/2;
+    contDelayBtnTurbinaUp = BOTON_DELAY/2;
+    contDelayBtnDiscoDown = BOTON_DELAY/2;
+    contDelayBtnTurbinaDown = BOTON_DELAY/2;
+    btnDiscoUp = 0;
+    btnDiscoDown = 0;
+    btnTurbinaUp = 0;
+    btnTurbinaDown = 0;
+    
+    
+    
     GIE = 1;    /* Habilito las interrupciones */
     while(1)
     {
         CLRWDT();
 
-        ControlBoton1();
-        ControlBoton2();
-        ControlBoton3();
-        ControlBoton4();
+        /* Control de los botones */
+        /* Boton 1 - Vent + */
+        if( !GPIObits.GP0)
+        {
+            /* Filtro de ruido */
+            if(contDelayBtnTurbinaUp < BOTON_DELAY)
+            {
+                contDelayBtnTurbinaUp++;
+                if(contDelayBtnTurbinaUp == BOTON_DELAY)
+                {
+                    /* Anti rebote */
+                    if( !btnTurbinaUp)
+                    {
+                        btnTurbinaUp = 1;                       
+                        if(pwmTurbina < 10) pwmTurbina++;
+                    }
+                }
+            }
+        }
+        else if(contDelayBtnTurbinaUp > 0)
+        {
+            contDelayBtnTurbinaUp--;
+            if(contDelayBtnTurbinaUp == 0)
+            {
+                btnTurbinaUp = 0;                       
+            }
+        }
+        
+        /* Boton 2 - Vent - */
+        if( !GPIObits.GP1)
+        {
+            /* Filtro de ruido */
+            if(contDelayBtnTurbinaDown < BOTON_DELAY)
+            {
+                contDelayBtnTurbinaDown++;
+                if(contDelayBtnTurbinaDown == BOTON_DELAY)
+                {
+                    /* Anti rebote */
+                    if( !btnTurbinaDown)
+                    {
+                        btnTurbinaDown = 1;                       
+                        if(pwmTurbina > 0) pwmTurbina--;
+                    }
+                }
+            }
+        }
+        else if(contDelayBtnTurbinaDown > 0)
+        {
+            contDelayBtnTurbinaDown--;
+            if(contDelayBtnTurbinaDown == 0)
+            {
+                btnTurbinaDown = 0;                       
+            }
+        }
+        
+        /* Boton 3 - Disco + */
+        if( !GPIObits.GP2)
+        {
+            /* Filtro de ruido */
+            if(contDelayBtnDiscoUp < BOTON_DELAY)
+            {
+                contDelayBtnDiscoUp++;
+                if(contDelayBtnDiscoUp == BOTON_DELAY)
+                {
+                    /* Anti rebote */
+                    if( !btnDiscoUp)
+                    {
+                        btnDiscoUp = 1;                       
+                        if(pwmDisco < 10) pwmDisco++;
+                    }
+                }
+            }
+        }
+        else if(contDelayBtnDiscoUp > 0)
+        {
+            contDelayBtnDiscoUp--;
+            if(contDelayBtnDiscoUp == 0)
+            {
+                btnDiscoUp = 0;                       
+            }
+        }
+        
+        /* Boton 4 - Disco - */
+        if( !GPIObits.GP3)
+        {
+            /* Filtro de ruido */
+            if(contDelayBtnDiscoDown < BOTON_DELAY)
+            {
+                contDelayBtnDiscoDown++;
+                if(contDelayBtnDiscoDown == BOTON_DELAY)
+                {
+                    /* Anti rebote */
+                    if( !btnDiscoDown)
+                    {
+                        btnDiscoDown = 1;                       
+                        if(pwmDisco > 0) pwmDisco--;
+                    }
+                }
+            }
+        }
+        else if(contDelayBtnDiscoDown > 0)
+        {
+            contDelayBtnDiscoDown--;
+            if(contDelayBtnDiscoDown == 0)
+            {
+                btnDiscoDown = 0;                       
+            }
+        }
         
         /* 1KHz */
         if(timerFlag1KHz)
         {
-            shadowReg = GPIO;
             timerFlag1KHz = 0;
-            shadowReg = OutputTurbina(shadowReg);
-            shadowReg = OutputDisco(shadowReg);
-            GPIO = shadowReg;
+    
+            /* Control de los motores */
+            if(powerStatus == 0)
+            {
+                GPIObits.GP3 = 0;
+                GPIObits.GP4 = 0;
+            }
+            else
+            {
+                /* Salida Disco */
+                if(pwmDisco == 0)
+                {
+                    GPIObits.GP3 = 0;
+                }
+                else if(pwmDisco == 10)
+                {
+                    GPIObits.GP3 = 1;
+                }
+                else
+                {
+                    countDisco++;
+                    if(countDisco == pwmDisco)
+                    {
+                        GPIObits.GP3 = 0;
+                    }
+                    else if(countDisco == 10)
+                    {
+                        GPIObits.GP3 = 1;
+                        countDisco = 0;
+                    }
+                }                
+                
+                /* Salida Turbina */
+                if(pwmTurbina == 0)
+                {
+                    GPIObits.GP4 = 0;
+                }
+                else if(pwmTurbina == 10)
+                {
+                    GPIObits.GP4 = 1;
+                }
+                else
+                {
+                    countTurbina++;
+                    if(countTurbina == pwmTurbina)
+                    {
+                        GPIObits.GP4 = 0;
+                    }
+                    else if(countTurbina == 10)
+                    {
+                        GPIObits.GP4 = 1;
+                        countTurbina = 0;
+                    }
+                }                
+                
+            }
+            
         }
     }
 }

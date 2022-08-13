@@ -14,30 +14,16 @@
     You should have received a copy of the GNU Lesser General Public
     License along with this library; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- ***************************************************************************/
-#ifndef PERIF_H
-#define	PERIF_H
+ ***************************************************************************/ 
+#ifndef _INPUT_H_
+#define	_INPUT_H_
 
-/* Define I/O */
-#define BOTON1  5
-#define BOTON2  4
-#define BOTON3  3
-#define BOTON4  2
+#include <xc.h> // include processor files - each processor file is guarded.  
 
-/* Define flags */
-#define BTN1    0x01
-#define BTN2    0x02
-#define BTN3    0x04
-#define BTN4    0x08
+void ControlBotonInit( void );
+void ControlBoton1( void );
+void ControlBoton2( void );
+void ControlBoton3( void );
+void ControlBoton4( void );
 
-#define IS_BTN1( x ) ( x & BTN1 )
-#define IS_BTN2( x ) ( x & BTN2 )
-#define IS_BTN3( x ) ( x & BTN3 )
-#define IS_BTN4( x ) ( x & BTN4 )
-
-void InitPerif( void );
-
-unsigned char CheckBtn(void);
-
-#endif	/* PERIF_H */
-
+#endif	/* _INPUT_H_ */
