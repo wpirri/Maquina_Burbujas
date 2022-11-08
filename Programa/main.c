@@ -17,7 +17,7 @@
  ***************************************************************************/
 
 /* *****************************************************************************
- * Controlador para máquina de burbujas
+ * Controlador para m?quina de burbujas
  * 
  * *****************************************************************************
  * PIC12F629
@@ -41,74 +41,106 @@
 #pragma config WDTE = ON
 #pragma config FOSC = INTRCIO
 /* ************************************************************************** */
-#define _XTAL_FREQ 4000000 /* Para las funciones de Delay */
-#define GetInstructionClock() (_XTAL_FREQ/4)
-#define GetPeripheralClock() (_XTAL_FREQ/4)
-
-#include <xc.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "iee.h"
+#include <xc.h>
+
+#include "config.h"
+#include "perif.h"
 #include "bitmacro.h"
 
-#include "input.h"
-#include "output.h"
-
-__EEPROM_DATA( 0x80, 0x80, 0x00, 0x00, 0x00,  0x00, 0x00, 0x00 );
+typedef enum
+{
+    INIT = 0,
+    STOP,
+    START,
+    RUNNING,
+    ERROR
+} stm_t;
 
 /* *************************************************************************** *
  * Globales
  */
-volatile unsigned char timerFlag1KHz;
-volatile unsigned char timerCount;
+stm_t STM;
 
-unsigned char powerStatus;
-unsigned char pwmDisco;
-unsigned char pwmTurbina;
+unsigned char flag_pulso_servo_1;
+unsigned char cont_pulso_servo_1;
+unsigned char cont_off_servo_1;
+unsigned char val_off_servo_1;
 
-/* Interrupción cada 256us */
+unsigned char flag_pulso_servo_2;
+unsigned char cont_pulso_servo_2;
+unsigned char cont_off_servo_2;
+unsigned char val_off_servo_2;
+
+unsigned char btn_status;
+
+unsigned int off_counter;
+
+unsigned char gShadow;
+
+/* Interrupci?n cada 256us */
 void Timer0Int()
 {
-    T0IF = 0;
-	if( !T0IE) return;
-    
-	timerCount++;
-    if(timerCount > 7)
+    if(cont_off_servo_1)
     {
-        timerCount = 0;
-        timerFlag1KHz = 1;
+        cont_off_servo_1--;
+        if(cont_off_servo_1 == 0)
+        {
+            ResetBit(SHADOW_REG, SERVO1_OUT);
+        }
     }
-}
-/*
-void Timer1Int( void )
-{
-    TMR1IF = 0;
-    if( !TMR1IE) return;
+    cont_pulso_servo_1++;
+    if(cont_pulso_servo_1 == 78)
+    {
+        cont_pulso_servo_1 = 0;
+        cont_off_servo_1 = val_off_servo_1;
+        if(cont_off_servo_1 > 0)
+        {
+            SetBit(SHADOW_REG, SERVO1_OUT);
+        }
+    }
+    
+    if(cont_off_servo_2)
+    {
+        cont_off_servo_2--;
+        if(cont_off_servo_2 == 0)
+        {
+            ResetBit(SHADOW_REG, SERVO2_OUT);
+        }
+    }
+    cont_pulso_servo_2++;
+    if(cont_pulso_servo_2 == 78)
+    {
+        cont_pulso_servo_2 = 0;
+        cont_off_servo_2 = val_off_servo_2;
+        if(cont_off_servo_2 > 0)
+        {
+            SetBit(SHADOW_REG, SERVO2_OUT);
+        }
+    }
 
+    if(IS_BTN1(btn_status))
+    {
+        off_counter++;
+        if(off_counter >= 10000)
+        {
+            STM = STOP;
+        }
+    }
+    else
+    {
+        off_counter = 0;
+    }
+    
     
 }
-*/
-/*
-void ExtInt( void )
-{
-    INTF = 0;
-    if( !INTE) return;
 
-}
-*/
-/*
- * void GPInt( void )
-{
-    unsigned char a = GPIO;
-    
-    GPIF = 0;
-    if( !GPIE) return;
-    
-
-}
-*/
+//void ExternalInt()
+//{
+//
+//}
 
 /* *************************************************************************** *
  * Punto de interrupcion
@@ -117,10 +149,10 @@ void __interrupt() ISR(void)
 {
     /* GIE = 0;  << NO SE DEBE HACER */
     /* Si se usa % dentro de interrupcion da overflow el stack */
-    if(T0IF)   { Timer0Int(); }
-    /*if(TMR1IF) { Timer1Int(); }*/
-    /*if(INTF)   { ExtInt();    }*/
-    /*if(GPIF) { GPInt(); }*/
+    /* <<< Interrupcion de TIMER0 - 250 us >>> */
+    if(T0IF)   { T0IF = 0; if( !T0IE) return; Timer0Int(); }
+    //if(TMR1IF) { TMR1IF = 0; if( !TMR1IE) Timer1Int(); }
+    //if(INTF)   { INTF = 0; if( !INTE) return; ExternalInt(); }
     /* GIE = 1;  << NO SE DEBE HACER >> */
 }
 
@@ -129,7 +161,6 @@ void __interrupt() ISR(void)
  */
 void main(void)
 {
-    unsigned char shadowReg;
     /*
     bit 7 GPPU: GPIO Pull-up Enable bit
         1 = GPIO pull-ups are disabled
@@ -158,95 +189,12 @@ void main(void)
         111         1:256       1:128
      */
     OPTION_REG = 0b00001111;
-
-    /**/
-    GPIO = 0x00;
     /* Control del comparador */
     CMCON = 0b00000000;     /* Solamente necesario para el 675 */
-
-    /* Configuracion de I/O */
+    GPIO = 0x00;
     TRISIO = 0b11111100;
     /* Pull-Up */
-    WPU = 0b00111100;
-    
-    /*
-     ADC
-    bit 7 ADFM: A/D Result Formed Select bit
-        1 = Right justified
-        0 = Left justified
-    bit 6 VCFG: Voltage Reference bit
-        1 = VREF pin
-        0 = VDD
-    bit 5-4 Unimplemented: Read as zero
-    bit 3-2 CHS1:CHS0: Analog Channel Select bits
-        00 = Channel 00 (AN0)
-        01 = Channel 01 (AN1)
-        10 = Channel 02 (AN2)
-        11 = Channel 03 (AN3)
-    bit 1 GO/DONE: A/D Conversion STATUS bit
-        1 = A/D conversion cycle in progress. Setting this bit starts an A/D conversion cycle.
-         This bit is automatically cleared by hardware when the A/D conversion has completed.
-        0 = A/D conversion completed/not in progress
-    bit 0 ADON: A/D Conversion STATUS bit
-        1 = A/D converter module is operating
-        0 = A/D converter is shut-off and consumes no operating current
-    */
-#ifdef _12F675
-    ADCON0 = 0b10000000;
-    ANSEL = 0b00000000;
-#endif
-    /*
-        bit 7 Unimplemented: Read as ?0?
-        bit 6 TMR1GE: Timer1 Gate Enable bit
-            If TMR1ON = 0:
-            This bit is ignored
-            If TMR1ON = 1:
-            1 = Timer1 is on if T1G pin is low
-            0 = Timer1 is on
-        bit 5-4 T1CKPS1:T1CKPS0: Timer1 Input Clock Prescale Select bits
-            11 = 1:8 Prescale Value
-            10 = 1:4 Prescale Value
-            01 = 1:2 Prescale Value
-            00 = 1:1 Prescale Value
-        bit 3 T1OSCEN: LP Oscillator Enable Control bit
-            If INTOSC without CLKOUT oscillator is active:
-            1 = LP oscillator is enabled for Timer1 clock
-            0 = LP oscillator is off
-            Else:
-            This bit is ignored
-        bit 2 T1SYNC: Timer1 External Clock Input Synchronization Control bit
-            TMR1CS = 1:
-            1 = Do not synchronize external clock input
-            0 = Synchronize external clock input
-            TMR1CS = 0:
-            This bit is ignored. Timer1 uses the internal clock.
-        bit 1 TMR1CS: Timer1 Clock Source Select bit
-            1 = External clock from T1OSO/T1CKI pin (on the rising edge)
-            0 = Internal clock (FOSC/4)
-        bit 0 TMR1ON: Timer1 On bit
-            1 = Enables Timer1
-            0 = Stops Timer1
-     */
-    T1CON = 0b00000000;
-
-    /*
-        bit 7 EEIE: EE Write Complete Interrupt Enable bit
-            1 = Enables the EE write complete interrupt
-            0 = Disables the EE write complete interrupt
-        bit 6 ADIE: A/D Converter Interrupt Enable bit (PIC12F675 only)
-            1 = Enables the A/D converter interrupt
-            0 = Disables the A/D converter interrupt
-        bit 5-4 Unimplemented: Read as ?0?
-        bit 3 CMIE: Comparator Interrupt Enable bit
-            1 = Enables the comparator interrupt
-            0 = Disables the comparator interrupt
-        bit 2-1 Unimplemented: Read as ?0?
-        bit 0 TMR1IE: TMR1 Overflow Interrupt Enable bit
-            1 = Enables the TMR1 overflow interrupt
-            0 = Disables the TMR1 overflow interrupt
-     */
-    PIE1 = 0b00000000;
-
+    WPU = 0b00110100;
     /*
     bit 7 GIE: Global Interrupt Enable bit
         1 = Enables all unmasked interrupts
@@ -274,41 +222,91 @@ void main(void)
         0 = None of the GP5:GP0 pins have changed state
      */
     INTCON = 0b00100000;
-
-    /*
-     * Port Change Interrupt
-     */
+    /* Interrupt on change */
     IOC = 0b00000000;
 
-    
-    ControlBotonInit();
-    OutputInit();
-    
-    powerStatus = 1;
-    timerFlag1KHz = 0;
-    timerCount = 0;
-
-    pwmDisco = 5;
-    pwmTurbina = 5;
+    STM=INIT;
+    off_counter = 0;
 
     GIE = 1;    /* Habilito las interrupciones */
     while(1)
     {
         CLRWDT();
-
-        ControlBoton1();
-        ControlBoton2();
-        ControlBoton3();
-        ControlBoton4();
         
-        /* 1KHz */
-        if(timerFlag1KHz)
+        /* Traslado los imput al shadow */
+        SHADOW_REG |= (INPUT_PORT & TRISIO);
+        SHADOW_REG &= (INPUT_PORT | (TRISIO ^ 0xFF));
+        /* Traslado el shadow a los output */
+        OUTPUT_PORT = SHADOW_REG;
+        
+        switch(STM)
         {
-            shadowReg = GPIO;
-            timerFlag1KHz = 0;
-            shadowReg = OutputTurbina(shadowReg);
-            shadowReg = OutputDisco(shadowReg);
-            GPIO = shadowReg;
+            case INIT:
+                flag_pulso_servo_1 = 0;
+                cont_pulso_servo_1 = 0;
+                cont_off_servo_1 = 0;
+
+                flag_pulso_servo_2 = 0;
+                cont_pulso_servo_2 = 0;
+                cont_off_servo_2 = 0;
+                
+                InitPerif();
+                
+                STM++;
+                break;
+            case STOP:
+                val_off_servo_1 = 0;  /*  <6 giro a la izquierda - >6 giro a la derecha */
+                val_off_servo_2 = 0;  /* 0= STOP .. 78= MAXIMO */
+                if( IS_BTN1(CheckBtn()) )
+                {
+                    while(CheckBtn()) CLRWDT();
+                    STM++;
+                }
+                break;
+            case START:
+                val_off_servo_1 = SERVO1_INIT;
+                val_off_servo_2 = SERVO2_INIT;
+                STM++;
+                break;
+            case RUNNING:
+                if((btn_status = CheckBtn()) != 0)
+                {
+                    if(IS_BTN1(btn_status))
+                    {
+                        while(CheckBtn()) CLRWDT();
+                        if(val_off_servo_2 < SERVO2_MAX)
+                        {
+                            val_off_servo_2 += SERVO2_STEP;
+                        }
+                    }
+                    else if(IS_BTN2(btn_status))
+                    {
+                        while(CheckBtn()) CLRWDT();
+                        if(val_off_servo_2 > SERVO2_MIN)
+                        {
+                            val_off_servo_2 -= SERVO2_STEP;
+                        }
+                    }
+                    else if(IS_BTN3(btn_status))
+                    {
+                        while(CheckBtn()) CLRWDT();
+                        if(val_off_servo_1 < SERVO1_MAX)
+                        {
+                            val_off_servo_1 += SERVO1_STEP;
+                        }
+                    }
+                    else if(IS_BTN4(btn_status))
+                    {
+                        while(CheckBtn()) CLRWDT();
+                        if(val_off_servo_1 > SERVO1_MIN)
+                        {
+                            val_off_servo_1 -= SERVO1_STEP;
+                        }
+                    }
+                }
+                break;
+            case ERROR:
+                break;
         }
     }
 }

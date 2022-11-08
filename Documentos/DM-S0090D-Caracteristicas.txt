@@ -25,3 +25,6 @@ Type: Digital,
 Rotation angle:180degree(PWM500-2500us)
 
 
+Red: Vcc
+Brown: Gnd
+Orange: Signal

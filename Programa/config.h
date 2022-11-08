@@ -14,16 +14,31 @@
     You should have received a copy of the GNU Lesser General Public
     License along with this library; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- ***************************************************************************/ 
-#ifndef _INPUT_H_
-#define	_INPUT_H_
+ ***************************************************************************/
+#ifndef CONFIG_H
+#define	CONFIG_H
 
-#include <xc.h> // include processor files - each processor file is guarded.  
+#define _XTAL_FREQ 4000000 /* Para las funciones de Delay */
+#define GetInstructionClock() (_XTAL_FREQ/4)
+#define GetPeripheralClock() (_XTAL_FREQ/4)
 
-void ControlBotonInit( void );
-void ControlBoton1( void );
-void ControlBoton2( void );
-void ControlBoton3( void );
-void ControlBoton4( void );
+#define SENSIBILIDAD_BOTON 100
 
-#endif	/* _INPUT_H_ */
+#define SERVO1_OUT  0
+#define SERVO1_MAX  11
+#define SERVO1_MIN  7
+#define SERVO1_INIT 7
+#define SERVO1_STEP 1
+
+#define SERVO2_OUT  1
+#define SERVO2_MAX  78
+#define SERVO2_MIN  26
+#define SERVO2_INIT 52
+#define SERVO2_STEP 13
+
+
+#define SHADOW_REG gShadow
+#define INPUT_PORT GPIO
+#define OUTPUT_PORT GPIO
+
+#endif	/* CONFIG_H */
